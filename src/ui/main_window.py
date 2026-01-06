@@ -2,7 +2,7 @@ import os
 
 import cv2
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtGui import QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QPushButton,
+    QShortcut,
     QSlider,
     QVBoxLayout,
     QWidget,
@@ -53,6 +54,9 @@ class DataCollectorApp(QMainWindow):
         self.thread = VideoThread()
         self.thread.change_pixmap_signal.connect(self.update_image)
         self.thread.start()
+        
+        # Ensure the window has focus initially so shortcuts work immediately
+        self.setFocus()
 
     def init_ui(self):
         """Initialize the user interface."""
@@ -85,7 +89,8 @@ class DataCollectorApp(QMainWindow):
         self.exp_slider.setValue(5)
         self.exp_slider.sliderReleased.connect(self.trigger_restart)
         self.lbl_exp_val = QLabel(str(self.exp_slider.value()))
-        self.exp_slider.valueChanged.connect(lambda v: self.lbl_exp_val.setText(str(v)))
+        self.exp_slider.valueChanged.connect(
+            lambda v: self.lbl_exp_val.setText(str(v)))
         exp_layout.addWidget(self.exp_slider)
         exp_layout.addWidget(self.lbl_exp_val)
         cam_layout.addLayout(exp_layout)
@@ -99,7 +104,8 @@ class DataCollectorApp(QMainWindow):
         self.gain_slider.setValue(10)
         self.gain_slider.sliderReleased.connect(self.trigger_restart)
         self.lbl_gain_val = QLabel(str(self.gain_slider.value() / 10.0))
-        self.gain_slider.valueChanged.connect(lambda v: self.lbl_gain_val.setText(str(v / 10.0)))
+        self.gain_slider.valueChanged.connect(
+            lambda v: self.lbl_gain_val.setText(str(v / 10.0)))
         gain_layout.addWidget(self.gain_slider)
         gain_layout.addWidget(self.lbl_gain_val)
         cam_layout.addLayout(gain_layout)
@@ -113,7 +119,8 @@ class DataCollectorApp(QMainWindow):
         self.sat_slider.setValue(10)
         self.sat_slider.sliderReleased.connect(self.trigger_restart)
         self.lbl_sat_val = QLabel(str(self.sat_slider.value() / 10.0))
-        self.sat_slider.valueChanged.connect(lambda v: self.lbl_sat_val.setText(str(v / 10.0)))
+        self.sat_slider.valueChanged.connect(
+            lambda v: self.lbl_sat_val.setText(str(v / 10.0)))
         sat_layout.addWidget(self.sat_slider)
         sat_layout.addWidget(self.lbl_sat_val)
         cam_layout.addLayout(sat_layout)
@@ -156,7 +163,8 @@ class DataCollectorApp(QMainWindow):
         self.tnr_str_slider.setValue(5)
         self.tnr_str_slider.sliderReleased.connect(self.trigger_restart)
         self.lbl_tnr_val = QLabel(str(self.tnr_str_slider.value() / 10.0))
-        self.tnr_str_slider.valueChanged.connect(lambda v: self.lbl_tnr_val.setText(str(v / 10.0)))
+        self.tnr_str_slider.valueChanged.connect(
+            lambda v: self.lbl_tnr_val.setText(str(v / 10.0)))
         tnr_layout.addWidget(self.tnr_str_slider)
         tnr_layout.addWidget(self.lbl_tnr_val)
         cam_layout.addLayout(tnr_layout)
@@ -178,7 +186,8 @@ class DataCollectorApp(QMainWindow):
         self.ee_str_slider.setValue(5)
         self.ee_str_slider.sliderReleased.connect(self.trigger_restart)
         self.lbl_ee_val = QLabel(str(self.ee_str_slider.value() / 10.0))
-        self.ee_str_slider.valueChanged.connect(lambda v: self.lbl_ee_val.setText(str(v / 10.0)))
+        self.ee_str_slider.valueChanged.connect(
+            lambda v: self.lbl_ee_val.setText(str(v / 10.0)))
         ee_layout.addWidget(self.ee_str_slider)
         ee_layout.addWidget(self.lbl_ee_val)
         cam_layout.addLayout(ee_layout)
@@ -232,7 +241,15 @@ class DataCollectorApp(QMainWindow):
         self.txt_prefix = QLineEdit()
         self.txt_prefix.setPlaceholderText("e.g. data_ or leave empty")
         self.txt_prefix.textChanged.connect(self.update_filename_counter)
+        # Prevent input box from grabbing focus and blocking shortcuts
+        self.txt_prefix.returnPressed.connect(self.txt_prefix.clearFocus)
         data_layout.addWidget(self.txt_prefix)
+        
+        # Helper label
+        lbl_hint = QLabel("(Press Enter to set prefix and enable shortcuts)")
+        lbl_hint.setStyleSheet(
+            "font-size: 10px; color: gray; font-style: italic;")
+        data_layout.addWidget(lbl_hint)
 
         # --- NEW FORMAT SELECTOR ---
         data_layout.addWidget(QLabel("Image Format:"))
@@ -259,6 +276,21 @@ class DataCollectorApp(QMainWindow):
         )
         self.btn_capture.clicked.connect(self.save_image)
         cap_layout.addWidget(self.btn_capture)
+
+        # --- SUBDIRECTORY CAPTURE BUTTONS ---
+        sub_layout = QHBoxLayout()
+        self.btn_top = QPushButton("TOP (1)")
+        self.btn_top.clicked.connect(lambda: self.save_to_subdir("TOP"))
+        self.shortcut_top = QShortcut(QKeySequence("1"), self)
+        self.shortcut_top.activated.connect(self.btn_top.click)
+        sub_layout.addWidget(self.btn_top)
+
+        self.btn_button = QPushButton("BUTTON (2)")
+        self.btn_button.clicked.connect(lambda: self.save_to_subdir("BUTTON"))
+        self.shortcut_button = QShortcut(QKeySequence("2"), self)
+        self.shortcut_button.activated.connect(self.btn_button.click)
+        sub_layout.addWidget(self.btn_button)
+        cap_layout.addLayout(sub_layout)
 
         self.btn_reset_roi = QPushButton("Reset ROI")
         self.btn_reset_roi.clicked.connect(self.reset_roi)
@@ -331,11 +363,12 @@ class DataCollectorApp(QMainWindow):
             self.lbl_dir.setText(f"Save Path:\n{self.save_dir}")
             self.update_filename_counter()
 
-    def update_filename_counter(self):
-        """Recalculate the next index based on the SELECTED extension and prefix."""
-        fmt = self.combo_format.currentText()
-        prefix = self.txt_prefix.text().strip()
-        existing_files = os.listdir(self.save_dir)
+    def get_next_index(self, directory, prefix, fmt):
+        """Helper to find the next available index in a directory."""
+        if not os.path.exists(directory):
+            return 1
+            
+        existing_files = os.listdir(directory)
         max_idx = 0
 
         for f in existing_files:
@@ -362,8 +395,14 @@ class DataCollectorApp(QMainWindow):
                                 max_idx = idx
                         except ValueError:
                             pass
+        return max_idx + 1
 
-        self.capture_count = max_idx + 1
+    def update_filename_counter(self):
+        """Recalculate the next index based on SELECTED extensionn & prefix."""
+        fmt = self.combo_format.currentText()
+        prefix = self.txt_prefix.text().strip()
+        idx = self.get_next_index(self.save_dir, prefix, fmt)
+        self.capture_count = idx
         self.lbl_counter.setText(
             f"Next: {prefix}{self.capture_count:04d}.{fmt}"
         )
@@ -383,51 +422,70 @@ class DataCollectorApp(QMainWindow):
         except ValueError:
             pass
 
+    def _save_frame_to_path(self, path):
+        """Internal method to save the frame to the given path."""
+        fmt = self.combo_format.currentText()
+        img_to_save = self.current_frame
+        
+        # --- ROI CROP LOGIC ---
+        roi = self.image_label.get_roi()
+        if roi:
+            x, y, w, h = roi
+            # Scale coordinates
+            # current_frame is DEFAULT_WIDTH x DEFAULT_HEIGHT (1280x720)
+            # display is DISPLAY_WIDTH x DISPLAY_HEIGHT (960x540)
+            scale_x = DEFAULT_WIDTH / DISPLAY_WIDTH
+            scale_y = DEFAULT_HEIGHT / DISPLAY_HEIGHT
+
+            real_x = int(x * scale_x)
+            real_y = int(y * scale_y)
+            real_w = int(w * scale_x)
+            real_h = int(h * scale_y)
+
+            # Clamp
+            real_x = max(0, real_x)
+            real_y = max(0, real_y)
+            real_w = min(DEFAULT_WIDTH - real_x, real_w)
+            real_h = min(DEFAULT_HEIGHT - real_y, real_h)
+
+            if real_w > 0 and real_h > 0:
+                img_to_save = img_to_save[
+                    real_y : real_y + real_h, real_x : real_x + real_w
+                ]
+
+        # --- HIGH QUALITY SAVING LOGIC ---
+        params = []
+        if fmt == "jpg":
+            # Quality 0-100 (Default is 95). We set 100 for AI Data.
+            params = [cv2.IMWRITE_JPEG_QUALITY, 100]
+        elif fmt == "png":
+            # Compression 0-9 (Default is 3). 0 is faster/larger.
+            # PNG is lossless, so quality isn't lost, just size.
+            params = [cv2.IMWRITE_PNG_COMPRESSION, 3]
+
+        cv2.imwrite(path, img_to_save, params)
+        print(f"Saved: {path}")
+
+    def save_to_subdir(self, subdir_name):
+        """Save frame to a specific subdirectory."""
+        if self.current_frame is None:
+            return
+
+        target_dir = os.path.join(self.save_dir, subdir_name)
+        if not os.path.exists(target_dir):
+            os.makedirs(target_dir)
+
+        fmt = self.combo_format.currentText()
+        prefix = self.txt_prefix.text().strip()
+        idx = self.get_next_index(target_dir, prefix, fmt)
+        filename = f"{prefix}{idx:04d}.{fmt}"
+        path = os.path.join(target_dir, filename)
+        
+        self._save_frame_to_path(path)
+        # Note: We don't update the main counter for subdir saves
+
     def save_image(self):
-        """Save the current frame to disk."""
-        if self.current_frame is not None:
-            fmt = self.combo_format.currentText()
-            prefix = self.txt_prefix.text().strip()
-            filename = f"{prefix}{self.capture_count:04d}.{fmt}"
-            path = os.path.join(self.save_dir, filename)
-
-            # --- ROI CROP LOGIC ---
-            img_to_save = self.current_frame
-            roi = self.image_label.get_roi()
-            if roi:
-                x, y, w, h = roi
-                # Scale coordinates
-                # current_frame is DEFAULT_WIDTH x DEFAULT_HEIGHT (1280x720)
-                # display is DISPLAY_WIDTH x DISPLAY_HEIGHT (960x540)
-                scale_x = DEFAULT_WIDTH / DISPLAY_WIDTH
-                scale_y = DEFAULT_HEIGHT / DISPLAY_HEIGHT
-
-                real_x = int(x * scale_x)
-                real_y = int(y * scale_y)
-                real_w = int(w * scale_x)
-                real_h = int(h * scale_y)
-
-                # Clamp
-                real_x = max(0, real_x)
-                real_y = max(0, real_y)
-                real_w = min(DEFAULT_WIDTH - real_x, real_w)
-                real_h = min(DEFAULT_HEIGHT - real_y, real_h)
-
-                if real_w > 0 and real_h > 0:
-                    img_to_save = img_to_save[
-                        real_y : real_y + real_h, real_x : real_x + real_w
-                    ]
-
-            # --- HIGH QUALITY SAVING LOGIC ---
-            params = []
-            if fmt == "jpg":
-                # Quality 0-100 (Default is 95). We set 100 for AI Data.
-                params = [cv2.IMWRITE_JPEG_QUALITY, 100]
-            elif fmt == "png":
-                # Compression 0-9 (Default is 3). 0 is faster/larger.
-                # PNG is lossless, so quality isn't lost, just size.
-                params = [cv2.IMWRITE_PNG_COMPRESSION, 3]
-
-            cv2.imwrite(path, img_to_save, params)
-            print(f"Saved: {path}")
-            self.update_filename_counter()
+        """Save the current frame to the main directory."""
+        # User requested to save in a subdirectory.
+        # Using 'DEFAULT' as the folder name.
+        self.save_to_subdir("DEFAULT")

@@ -47,6 +47,7 @@ class VideoThread(QThread):
         if self.gain_range:
             pipeline += (
                 f'gainrange="{self.gain_range[0]} {self.gain_range[1]}" '
+                'ispdigitalgainrange="1 1" '
             )
         if self.ae_lock:
             pipeline += "aelock=true "
@@ -67,8 +68,8 @@ class VideoThread(QThread):
             f"height={DEFAULT_HEIGHT}, format=NV12, "
             f"framerate={CAM_CONF['framerate']} ! "
             f"nvvidconv flip-method={self.get_flip_method()} ! "
-            f"video/x-raw, width={DISPLAY_WIDTH}, "
-            f"height={DISPLAY_HEIGHT}, format=BGRx ! "
+            f"video/x-raw, width={DEFAULT_WIDTH}, "
+            f"height={DEFAULT_HEIGHT}, format=BGRx ! "
             f"videoconvert ! video/x-raw, format=BGR ! appsink drop=1"
         )
         return pipeline

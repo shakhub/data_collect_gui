@@ -277,21 +277,6 @@ class DataCollectorApp(QMainWindow):
         self.btn_capture.clicked.connect(self.save_image)
         cap_layout.addWidget(self.btn_capture)
 
-        # --- SUBDIRECTORY CAPTURE BUTTONS ---
-        sub_layout = QHBoxLayout()
-        self.btn_top = QPushButton("TOP (1)")
-        self.btn_top.clicked.connect(lambda: self.save_to_subdir("TOP"))
-        self.shortcut_top = QShortcut(QKeySequence("1"), self)
-        self.shortcut_top.activated.connect(self.btn_top.click)
-        sub_layout.addWidget(self.btn_top)
-
-        self.btn_button = QPushButton("BUTTON (2)")
-        self.btn_button.clicked.connect(lambda: self.save_to_subdir("BUTTON"))
-        self.shortcut_button = QShortcut(QKeySequence("2"), self)
-        self.shortcut_button.activated.connect(self.btn_button.click)
-        sub_layout.addWidget(self.btn_button)
-        cap_layout.addLayout(sub_layout)
-
         self.btn_reset_roi = QPushButton("Reset ROI")
         self.btn_reset_roi.clicked.connect(self.reset_roi)
         cap_layout.addWidget(self.btn_reset_roi)
@@ -316,7 +301,11 @@ class DataCollectorApp(QMainWindow):
     def update_image(self, cv_img):
         """Update the image label with the new frame."""
         self.current_frame = cv_img
-        rgb_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+        
+        # Resize for display (DISPLAY_WIDTH, DISPLAY_HEIGHT)
+        display_frame = cv2.resize(cv_img, (DISPLAY_WIDTH, DISPLAY_HEIGHT))
+        
+        rgb_img = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_img.shape
         qt_img = QImage(rgb_img.data, w, h, ch * w, QImage.Format_RGB888)
         self.image_label.setPixmap(QPixmap.fromImage(qt_img))
@@ -437,10 +426,32 @@ class DataCollectorApp(QMainWindow):
             scale_x = DEFAULT_WIDTH / DISPLAY_WIDTH
             scale_y = DEFAULT_HEIGHT / DISPLAY_HEIGHT
 
-            real_x = int(x * scale_x)
-            real_y = int(y * scale_y)
-            real_w = int(w * scale_x)
-            real_h = int(h * scale_y)
+            real_x = int(round(x * scale_x))
+            real_y = int(round(y * scale_y))
+            real_w = int(round(w * scale_x))
+            real_h = int(round(h * scale_y))
+
+            # If a strict ROI size is selected, enforce it exactly (ignoring rounding drift)
+            # unless it goes out of bounds.
+            current_roi_selection = self.combo_roi_size.currentText()
+            if current_roi_selection != "Free Select":
+                try:
+                    target_w, target_h = map(int, current_roi_selection.split("x"))
+                    
+                    # Calculate center of the current rounded ROI
+                    center_x = real_x + (real_w / 2.0)
+                    center_y = real_y + (real_h / 2.0)
+
+                    # Update dimensions
+                    real_w = target_w
+                    real_h = target_h
+
+                    # Recalculate top-left to keep centered
+                    real_x = int(round(center_x - (real_w / 2.0)))
+                    real_y = int(round(center_y - (real_h / 2.0)))
+
+                except ValueError:
+                    pass
 
             # Clamp
             real_x = max(0, real_x)
@@ -466,26 +477,17 @@ class DataCollectorApp(QMainWindow):
         cv2.imwrite(path, img_to_save, params)
         print(f"Saved: {path}")
 
-    def save_to_subdir(self, subdir_name):
-        """Save frame to a specific subdirectory."""
+
+    def save_image(self):
+        """Save the current frame to the selected directory."""
         if self.current_frame is None:
             return
 
-        target_dir = os.path.join(self.save_dir, subdir_name)
-        if not os.path.exists(target_dir):
-            os.makedirs(target_dir)
-
         fmt = self.combo_format.currentText()
         prefix = self.txt_prefix.text().strip()
-        idx = self.get_next_index(target_dir, prefix, fmt)
+        idx = self.get_next_index(self.save_dir, prefix, fmt)
         filename = f"{prefix}{idx:04d}.{fmt}"
-        path = os.path.join(target_dir, filename)
-        
-        self._save_frame_to_path(path)
-        # Note: We don't update the main counter for subdir saves
+        path = os.path.join(self.save_dir, filename)
 
-    def save_image(self):
-        """Save the current frame to the main directory."""
-        # User requested to save in a subdirectory.
-        # Using 'DEFAULT' as the folder name.
-        self.save_to_subdir("DEFAULT")
+        self._save_frame_to_path(path)
+        self.update_filename_counter()

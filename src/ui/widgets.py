@@ -2,7 +2,12 @@ from PyQt5.QtCore import QPoint, QRect, Qt
 from PyQt5.QtGui import QPainter, QPen
 from PyQt5.QtWidgets import QLabel
 
-from src.config import DEFAULT_WIDTH, DISPLAY_WIDTH
+from src.config import (
+    DEFAULT_HEIGHT,
+    DEFAULT_WIDTH,
+    DISPLAY_HEIGHT,
+    DISPLAY_WIDTH,
+)
 
 
 class VideoLabel(QLabel):
@@ -25,6 +30,7 @@ class VideoLabel(QLabel):
             self.roi_end = event.pos()
             self.is_selecting = True
             self.has_roi = False
+            self.fixed_roi_text = None
             self.update()
 
     def mouseMoveEvent(self, event):
@@ -86,19 +92,27 @@ class VideoLabel(QLabel):
             painter.drawRect(rect)
 
             # Draw dimensions
-            scale_x = DEFAULT_WIDTH / DISPLAY_WIDTH
-            real_w = int(rect.width() * scale_x)
-            real_h = int(rect.height() * scale_x)  # scale_y is same
+            if hasattr(self, 'fixed_roi_text') and self.fixed_roi_text:
+                text = self.fixed_roi_text
+            else:
+                scale_x = DEFAULT_WIDTH / DISPLAY_WIDTH
+                scale_y = DEFAULT_HEIGHT / DISPLAY_HEIGHT
+                
+                real_w = int(round(rect.width() * scale_x))
+                real_h = int(round(rect.height() * scale_y))
 
-            text = f"{real_w}x{real_h} px"
+                text = f"{real_w}x{real_h} px"
+            
             painter.setPen(QPen(Qt.yellow, 1, Qt.SolidLine))
             painter.drawText(rect.topLeft() + QPoint(5, -5), text)
 
     def set_fixed_roi(self, w, h):
         """Set a fixed ROI centered in the view."""
         scale_x = DISPLAY_WIDTH / DEFAULT_WIDTH
-        disp_w = int(w * scale_x)
-        disp_h = int(h * scale_x)
+        scale_y = DISPLAY_HEIGHT / DEFAULT_HEIGHT
+        
+        disp_w = int(round(w * scale_x))
+        disp_h = int(round(h * scale_y))
 
         center_x = self.width() // 2
         center_y = self.height() // 2
@@ -109,6 +123,7 @@ class VideoLabel(QLabel):
             self.roi_start.x() + disp_w - 1, self.roi_start.y() + disp_h - 1
         )
         self.has_roi = True
+        self.fixed_roi_text = f"{w}x{h} px"
         self.update()
 
     def get_roi(self):
@@ -119,4 +134,5 @@ class VideoLabel(QLabel):
 
     def clear_roi(self):
         self.has_roi = False
+        self.fixed_roi_text = None
         self.update()

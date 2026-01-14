@@ -12,15 +12,15 @@ def load_config(config_path="config.json"):
         print(f"Config file {config_path} not found. Using defaults.")
         return {
             "camera": {
-                "default_width": 1280,
-                "default_height": 720,
+                "default_width": 1640,
+                "default_height": 1232,
                 "display_width": 960,
                 "display_height": 540,
                 "framerate": "30/1",
                 "exposure_min": 13000,
                 "exposure_multiplier": 3000000,
                 "gain_min": 1.0,
-                "gain_max": 10.0,
+                "gain_max": 1.0,
             },
             "app": {
                 "window_title": "Jetson Data Collector Pro",
